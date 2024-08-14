@@ -1,0 +1,27 @@
+{
+  "python.analysis.typeCheckingMode": "off",
+  "python.analysis.autoImportCompletions": true,
+  "workbench.colorCustomizations": {
+    "activityBar.activeBackground": "#8a9bc7",
+    "activityBar.background": "#8a9bc7",
+    "activityBar.foreground": "#15202b",
+    "activityBar.inactiveForeground": "#15202b99",
+    "activityBarBadge.background": "#97485e",
+    "activityBarBadge.foreground": "#e7e7e7",
+    "commandCenter.border": "#e7e7e799",
+    "sash.hoverBorder": "#8a9bc7",
+    "statusBar.background": "#677db7",
+    "statusBar.foreground": "#e7e7e7",
+    "statusBarItem.hoverBackground": "#8a9bc7",
+    "statusBarItem.remoteBackground": "#677db7",
+    "statusBarItem.remoteForeground": "#e7e7e7",
+    "titleBar.activeBackground": "#677db7",
+    "titleBar.activeForeground": "#e7e7e7",
+    "titleBar.inactiveBackground": "#677db799",
+    "titleBar.inactiveForeground": "#e7e7e799"
+  },
+  "peacock.color": "#677DB7",
+  "python.testing.pytestArgs": ["."],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
+}
