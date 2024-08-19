@@ -8,7 +8,7 @@ from models.rules.enums import ActionType
 
 if TYPE_CHECKING:
 
-    from models.rules.temp_execution import Trades
+    from models.rules.execution import Trades
 
 
 class TradeSchedule(BaseModel):

@@ -10,7 +10,7 @@ from models.market_data.cm_models import CMMarketData
 from models.market_data.eq_models import EQMarketData
 from models.market_data.fi_models import FIMarketData
 from models.market_data.fx_models import FXMarketData
-from models.rules.temp_execution import InstrumentTypes
+from models.trades.enums import InstrumentTypes
 from static_data.underlying_data import AssetClass
 
 

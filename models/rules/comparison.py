@@ -39,7 +39,7 @@ from static_data.underlying_data import AssetClass
 
 if TYPE_CHECKING:
     from models.market_data.market_model import MarketModel
-    from models.rules.temp_execution import Trades
+    from models.rules.execution import Trades
 
 
 class DateOffsetType(str, Enum):

@@ -10,12 +10,13 @@ from models.input.input import BaseStrategyInput
 from models.market_data.market_model import MarketModel
 from models.output.output import BacktesterOutput
 from models.rules.rules import TradeRule
-from models.rules.temp_execution import (
+from models.rules.execution import (
     ExecutionRule,
     TradeMessageModel,
     Trades,
 )
 from models.trades.schedule import TradeSchedule
+from modules.stream_manager import Stream
 
 
 class Backtester(BaseModel):
@@ -56,7 +57,7 @@ class Backtester(BaseModel):
             self._manage_open_trades(data=self.strategy_input.data, date=_date)
             self._evaluate_new_trades(data=self.strategy_input.data, date=_date)
 
-    ### STREAMS
+    # STREAMS
 
     def manage_streams(self, current_date):
         # Iterate over active streams and check if they need to roll
@@ -82,7 +83,7 @@ class Backtester(BaseModel):
             Stream(position=new_position, open_date=current_date)
         )
 
-    ### OPTIMISATION
+    # OPTIMISATION
 
     def _run_optimisation(self, optimisation_config: OptimisationConfig):
         """Run optimisation."""

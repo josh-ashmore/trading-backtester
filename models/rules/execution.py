@@ -1,309 +1,363 @@
-"""Backtest Execution Rules."""
+"""Anoter attempt at execution rules."""
+
+from copy import deepcopy
+from datetime import date
+from enum import Enum
+import math
 
 import numpy as np
-from pydantic import BaseModel, Field
-from datetime import date, datetime
-from enum import Enum
-from typing import TYPE_CHECKING, List, Literal, Optional, Dict, Any
+from pydantic import BaseModel
+from typing import List, Optional, TYPE_CHECKING
 
+from models.account.account import Account
+from models.market_data.cm_models import CMVolatilitySurfaceData
+from models.market_data.eq_models import EQVolatilitySurfaceData
+from models.market_data.fx_models import FXVolatilitySurfaceData
+from models.rules.enums import ActionType
+from models.rules.rules import TradeRule
+from models.trades.enums import CalcualtionType, DirectionType, NotionalRuleType
+from models.trades.trades import (
+    CallTrade,
+    NotionalRule,
+    PutTrade,
+    TradeMessageModel,
+    Trades,
+    TreasuryBillTrade,
+)
 
-from models.trades.spot_trade import Trades
 
 if TYPE_CHECKING:
     from models.market_data.market_model import MarketModel
 
 
-Direction = Literal["Buy", "Sell"]
+class ExecutionRuleType(str, Enum):
+    """Execution Rule Enum."""
+
+    BUY = "Buy"
+    SELL = "Sell"
+    SPREAD = "Spread"
 
 
-class OrderType(str, Enum):
-    """Order Type Enum."""
+class NotionalDistributionType(str, Enum):
+    """Notional Distribution Type Enum."""
 
-    MARKET = "market"
-    LIMIT = "limit"
-    STOP_LOSS = "stop_loss"
-    TAKE_PROFIT = "take_profit"
+    EQUAL = "equal"
+    PROPORTIONAL = "proportional"  # Based on some trade characteristic
 
 
-class ExecutionStatus(str, Enum):
-    PENDING = "pending"
-    EXECUTED = "executed"
-    FAILED = "failed"
-    PARTIALLY_FILLED = "partially_filled"
+class ExecutionRule(BaseModel):
+    """Execution Rule Model."""
 
+    rule_type: ExecutionRuleType
 
-class TradeDetails(BaseModel):
-    underlying: str
-    direction: Direction
-    style: str
-    notional_amounts: float | None = None  # fill this in later
-    price: Optional[float] = None
-    order_type: OrderType = OrderType.MARKET
-    timestamp: datetime = Field(default_factory=datetime.now)  # timezone.utc
+    notional_distribution: NotionalDistributionType = NotionalDistributionType.EQUAL
+    trades: List[Trades]
 
-    premium_payment_date: date | None = None
+    current_cost: Optional[float | None] = None
+    target_cost: Optional[float | None] = None
 
-    # unsure
-    relative_pos: int
-    slip_rate: tuple[str, float] = ("dollar_abs", 0)
-    adjust_notional_factor: str = "Strike"
-    moneyness: float = 1.00
-
-    # Optional fields for limit/stop orders
-    stop_price: Optional[float] = None  # For stop-loss or take-profit orders
-    limit_price: Optional[float] = None  # For limit orders
-
-    def execute_trade(self, snapshot: "MarketModel", date: date) -> Dict[str, Any]:
-        """Execute the trade based on current market conditions."""
-        # Placeholder logic; actual implementation depends on how you simulate trades
-        current_value = snapshot.get(f"{self.underlying} Spot", dates=date)
-
-        if self.order_type == OrderType.MARKET:
-            executed_price = current_value
-        elif self.order_type == OrderType.LIMIT and current_value <= self.limit_price:
-            executed_price = current_value
-        elif (
-            self.order_type == OrderType.STOP_LOSS and current_value <= self.stop_price
-        ):
-            executed_price = self.stop_price
-        else:
-            executed_price = None
-
-        return {
-            "underlying": self.underlying,
-            "direction": self.direction,
-            # "notional_amounts": self.notional_amounts,
-            "strike": executed_price,
-            "timestamp": self.timestamp,
-            "status": "filled" if executed_price else "unfilled",
-        }
-
-
-class TradeExecution(BaseModel):
-    """Trade Execution Model."""
-
-    trade_details: List[TradeDetails]
-    model_type: str
-
-    REQUIRED_SIGNALS: list[str] | None = None
-
-    def validate_required_signals(self, snapshot: "MarketModel"):
-        """Validate required signals."""
-        if self.REQUIRED_SIGNALS is not None:
-            for signal in self.REQUIRED_SIGNALS:
-                assert signal in snapshot.variable_names
-        return self
-
-    def slippage_adjustment(
-        self,
-        trade: "Trades",
-        leg: Any,
-        snapshot: "MarketModel",
-        account_slippage_: bool = True,
-        notional_adjustment: bool = False,
+    def execute(
+        self, trade_rule: TradeRule, data: "MarketModel", date: date, account: Account
     ):
-        """Incorporates transaction cost when opening or closing a trade.
+        """Execute all trades logic."""
+        new_trades = []
+        match self.rule_type:
+            case ExecutionRuleType.SPREAD:
+                total_cost = 0
+                self.current_cost = total_cost
+                for trade in deepcopy(self.trades):
+                    new_trades.append(
+                        self.execute_trade(
+                            trade=trade,
+                            data=data,
+                            date=date,
+                            trade_rule=trade_rule,
+                            account=account,
+                        )
+                    )
+                    total_cost += trade.premium
+                    self.current_cost = total_cost
 
+                if (
+                    self.target_cost  # leaving this so we can check trade results
+                    # isinstance(self.target_cost, float | int)
+                    and abs(total_cost - self.target_cost) >= 0.01
+                ):
+                    return []
+            case ExecutionRuleType.BUY | ExecutionRuleType.SELL:
+                for trade in deepcopy(self.trades):
+                    new_trades.append(
+                        self.execute_trade(
+                            trade=trade,
+                            data=data,
+                            date=date,
+                            trade_rule=trade_rule,
+                            account=account,
+                        )
+                    )
+        return new_trades
 
-        Args:
-            trade (Trade): trade at which transaction cost is included in
-            leg (Leg): leg of trade where trade info is extracted.
-            premium (bool, optional): to adjust account based on trade premium.
-                Defaults to True
-            slippage_ (bool, optional): to adjust account based on slippage.
-                Defaults to True
-        """
-        slip_rate: str = trade.slip_rate[0]
-        match slip_rate:
-            case "dollar_abs":
-                slippage = -1 * trade.slip_rate[-1]
-            case "premium_pct":
-                slippage = -1 * np.abs(trade.legs[-1].premium * trade.slip_rate[-1])
-            case "notional_pct":
-                slippage = -1 * trade.slip_rate[-1] * trade.legs[-1].notional_in_ccy
-            case "dollar_notional_abs":
-                slippage = self._dollar_notional_abs_slippage(
-                    trade=trade, leg=leg, snapshot=snapshot
+    def execute_trade(
+        self,
+        trade: Trades,
+        data: "MarketModel",
+        date: date,
+        trade_rule: TradeRule,
+        account: Account,
+    ):
+        """Execute each trade logic."""
+        trade.trade_date = date
+        match trade.instrument_type:
+            case "Call" | "Put":
+                trade = self._execute_option_trade(
+                    trade=trade,
+                    data=data,
+                    date=date,
+                    trade_rule=trade_rule,
+                    account=account,
+                )
+            case "Treasury Bill":
+                trade = self._execute_treasury_bill_trade(
+                    trade=trade,
+                    data=data,
+                    date=date,
+                    trade_rule=trade_rule,
+                    account=account,
                 )
             case _:
-                slippage = 0
+                raise ValueError(f"Unknown trade type: {trade.instrument_type}")
+        trade.number_of_contracts = math.floor(trade.notional_amount / trade.open_price)
+        trade.notional_amount = trade.number_of_contracts * trade.open_price
+        account.update_balance_for_open_trade(trade=trade)
+        return trade
 
-        leg.slippage = 0
-        if account_slippage_:
-            leg.slippage = slippage
-            self.account.access(
-                data=snapshot,
-                notional=slippage,
-                ccy=self.base_trade["premium_currency"],
-                date=leg.trade_date,
-                for_ccy=True,
-            )
-        if notional_adjustment:
-            trade.legs[0].notional_amounts = trade.legs[0].notional_amounts + slippage
-        return slippage
-
-    def _dollar_notional_abs_slippage(
-        self, trade: "Trades", leg: Any, snapshot: "MarketModel"
+    def _execute_option_trade(
+        self,
+        trade: PutTrade | CallTrade,
+        data: "MarketModel",
+        date: date,
+        trade_rule: TradeRule,
+        account: Account,
     ):
-        """Calculate slippage with dollar_notional_abs slip rate style."""
-        adjust_notional_factor = trade.adjust_notional_factor
-        match adjust_notional_factor:
-            case "Spot":
-                if trade.premium_payment_date == leg.premium_payment_date:
-                    factor = snapshot.get(
-                        trade.underlying + " Spot",
-                        dates=leg.premium_payment_date,
-                    )[0][0]
-                else:
-                    factor = trade.spot_ref[0][0]
-            case "Strike":
-                value_date = snapshot.get(
-                    f"{trade.underlying} EXSurface", dates=trade.trade_date
-                ).expiry_dates[trade.legs[0].relative_pos]
-                style_ = "Put" if "Put" in trade.style else "Call"
-                factor = snapshot.get(
-                    f"{trade.underlying} EXSurface", dates=trade.trade_date
-                ).strike(
-                    style=style_,
-                    pos_pair=("expiry_date", value_date),
-                    moneyness_pair=("moneyness", trade.moneyness),
+        """Execute option trade logic."""
+        vol_surf: (
+            FXVolatilitySurfaceData | EQVolatilitySurfaceData | CMVolatilitySurfaceData
+        ) = [
+            datum
+            for datum in getattr(data, trade.asset_class)[trade.underlying].volatility
+            if datum.spot_date == date
+        ][
+            0
+        ]
+        trade.value_date = next(
+            datum.maturity for datum in vol_surf.surface if datum.maturity >= date
+        )
+        trade.strike = self.calculate_strike_price(
+            data=data,
+            trade=trade,
+            date=date,
+            current_cost=self.current_cost,
+            tolerance=1e-4,
+        )
+        option_price = data.get(
+            market_variable="Option Price",
+            underlying=trade.underlying,
+            date=date,
+            maturity_date=trade.value_date,
+            asset_class=trade.asset_class,
+            strike=trade.strike,
+            instrument_type=trade.instrument_type,
+        )
+
+        match trade.direction:
+            case DirectionType.BUY:
+                trade_premium = -option_price
+            case DirectionType.SELL:
+                trade_premium = option_price
+
+        trade.notional_amount = self.calculate_notional(
+            notional_rule=trade.notional_rule, account=account
+        )
+        trade.open_price = data.get(
+            market_variable="Spot",
+            underlying=trade.underlying,
+            date=date,
+            asset_class=trade.asset_class,
+        )
+
+        trade.premium = trade_premium
+        trade.message.append(
+            TradeMessageModel(date=date, message=ActionType.OPEN, trade_rule=trade_rule)
+        )
+        return trade
+
+    def _execute_treasury_bill_trade(
+        self,
+        trade: TreasuryBillTrade,
+        data: "MarketModel",
+        date: date,
+        trade_rule: TradeRule,
+        account: Account,
+    ):
+        """Execute Treasury Bill Trade."""
+        yield_curve = next(
+            curve for curve in data.FI["US10Y"].yield_curve if curve.spot_date == date
+        )
+        next_maturity_date = next(
+            date for date in yield_curve.maturity_dates if date >= date
+        )
+        trade.interest_rate = yield_curve.yields[
+            yield_curve.maturity_dates.index(next_maturity_date)
+        ]
+        trade.notional_amount = self.calculate_notional(
+            notional_rule=trade.notional_rule, account=account
+        )
+        trade.open_price = data.get(
+            market_variable="Spot",
+            underlying=trade.underlying,
+            date=date,
+            asset_class=trade.asset_class,
+        )
+        trade.message.append(
+            TradeMessageModel(date=date, message=ActionType.OPEN, trade_rule=trade_rule)
+        )
+        return trade
+
+    def calculate_notional(
+        self, notional_rule: NotionalRule, account: Account
+    ) -> float:
+        match notional_rule.rule_type:
+            case NotionalRuleType.FIXED:
+                notional_amount = float(notional_rule.value)
+            case NotionalRuleType.PERCENTAGE_OF_ACCOUNT:
+                notional_amount = account.cash_balance * (
+                    float(notional_rule.value) / 100.0
                 )
-            case "Synthetic_long":
-                value_date = snapshot.get(
-                    f"{trade.underlying} EXSurface", dates=trade.trade_date
-                ).expiry_dates[trade.legs[0].relative_pos]
-                tenor = ("expiry_date", value_date)
-                strike = snapshot.get(
-                    f"{trade.underlying} EXSurface", dates=trade.trade_date
-                ).strike(
-                    style="Put",
-                    pos_pair=("expiry_date", value_date),
-                    moneyness_pair=("moneyness", trade.moneyness),
+            case NotionalRuleType.DYNAMIC_FORMULA | _:
+                # return self.evaluate_formula(notional_rule.value, trade, account)
+                raise NotImplementedError(
+                    f"Notional rule {notional_rule.rule_type} is not yet implemented."
                 )
-                call_premium_price = snapshot.get(
-                    f"{trade.underlying} EXSurface", dates=trade.trade_date
-                ).price(
-                    style="Call",
-                    pos_pair=tenor,
-                    moneyness_pair=("strike", strike),
+        return notional_amount
+
+    def calculate_strike_price(
+        self,
+        data: "MarketModel",
+        trade: Trades,
+        date: date,
+        current_cost: Optional[float] = None,
+        tolerance: float = 1e-4,
+    ):
+        """Calculate strike price based on combined type."""
+        strike = (
+            self.calculate_dynamic_strike(
+                data=data,
+                date=date,
+                trade=trade,
+                current_cost=current_cost,
+                tolerance=tolerance,
+            )
+            if trade.strike is None
+            else trade.strike
+        )
+
+        match trade.strike_calculation:
+            case CalcualtionType.PERCENT_OTM:
+                return data.get(
+                    market_variable="Spot",
+                    underlying=trade.underlying,
+                    date=date,
+                    asset_class=trade.asset_class,
+                ) * (1 - strike / 100)
+            case CalcualtionType.PERCENT_ITM:
+                return data.get(
+                    market_variable="Spot",
+                    underlying=trade.underlying,
+                    date=date,
+                    asset_class=trade.asset_class,
+                ) * (1 + strike / 100)
+            case CalcualtionType.PERCENT_ATM:
+                return data.get(
+                    market_variable="Spot",
+                    underlying=trade.underlying,
+                    date=date,
+                    asset_class=trade.asset_class,
                 )
-                put_premium_price = snapshot.get(
-                    f"{trade.underlying} EXSurface", dates=trade.trade_date
-                ).price(
-                    style="Put",
-                    pos_pair=tenor,
-                    moneyness_pair=("strike", strike),
+            case CalcualtionType.DELTA_NEUTRAL:
+                return self.calculate_delta_neutral_strike(
+                    data=data, date=date, trade=trade
                 )
-                factor = strike - put_premium_price + call_premium_price
-            case "Strike_premium":
-                value_date = snapshot.get(
-                    f"{trade.underlying} EXSurface", dates=trade.trade_date
-                ).expiry_dates[trade.legs[0].relative_pos]
-                tenor = ("expiry_date", value_date)
-                strike = snapshot.get(
-                    f"{trade.underlying} EXSurface", dates=trade.trade_date
-                ).strike(
-                    style="Put",
-                    pos_pair=("expiry_date", value_date),
-                    moneyness_pair=("moneyness", trade.moneyness),
-                )
-                put_premium_price = snapshot.get(
-                    f"{trade.underlying} EXSurface", dates=trade.trade_date
-                ).price(
-                    style="Put",
-                    pos_pair=tenor,
-                    moneyness_pair=("strike", strike),
-                )
+            case CalcualtionType.ABS:
+                return strike
+            case _:
+                raise ValueError("Invalid strike calculation type")
 
-                factor = strike - put_premium_price
-        return -1 * trade.slip_rate[-1] * trade.legs[-1].notional_amounts / factor
+    def calculate_delta_neutral_strike(
+        self, data: "MarketModel", date: date, trade: Trades
+    ):
+        # Implement your delta-neutral strike calculation logic here.
+        # This might involve complex calculations with option Greeks.
+        # For demonstration, assume it to be ATM (asset price):
+        return data.get(
+            market_variable="Spot",
+            underlying=trade.underlying,
+            date=date,
+            asset_class=trade.asset_class,
+        )  # Simplified for demonstration purposes
 
-    def calculate_notional(self, trade_details: TradeDetails, date: date, **kwargs):
-        """Calculate notional of trade."""
-        raise NotImplementedError("Not implemented yet.")
+    def calculate_dynamic_strike(
+        self,
+        data: "MarketModel",
+        trade: Trades,
+        date: date,
+        current_cost: float,
+        tolerance: float = 1e-4,
+    ):
+        """Dynamically calculate the strike for an option.
 
-    def calculate_moneyness(self, date: date, **kwargs):
-        """Calculate moneyness of trade."""
-        raise NotImplementedError("Not implemented yet.")
+        The aim is to achieve target cost using bisection method.
+        """
+        remaining_cost = self.target_cost - current_cost
 
+        # Define the boundaries for strike price, for demonstration using a percentage
+        #   range
+        asset_price = data.get(
+            market_variable="Spot",
+            underlying=trade.underlying,
+            date=date,
+            asset_class=trade.asset_class,
+        )
+        low_strike = asset_price * 0.5  # 50% of the asset price as lower bound
+        high_strike = asset_price * 1.5  # 150% of the asset price as upper bound
 
-# class GLDOverlayExecution(TradeExecution):
-#     """GLD Overlay Execution Model."""
+        def cost_difference(strike: float, data: "MarketModel", date: date):
+            """Cost difference.
 
-#     leverage_ratio: float | int | str = 1
-#     percent_allocation: float = 0.2
-#     model_type: str = "GLDOverlay"
+            Define a function to find the root of
+            (this function should be zero at the correct strike).
+            """
+            option_price = data.get(
+                market_variable="Option Price",
+                underlying=trade.underlying,
+                date=date,
+                maturity_date=trade.value_date,
+                asset_class=trade.asset_class,
+                strike=strike,
+                instrument_type=trade.instrument_type,
+            )
+            return option_price + remaining_cost
 
-#     REQUIRED_SIGNALS: list[str] = [
-#         "VIX GVZ 22D Ratio SIGNAL",
-#         "GLD Call Imp Vol SIGNAL",
-#     ]
+        # Implement the bisection method
+        while high_strike - low_strike > tolerance:
+            mid_strike = (low_strike + high_strike) / 2
+            mid_cost_diff = cost_difference(strike=mid_strike, data=data, date=date)
 
-#     def calculate_notional(
-#         self,
-#         trade_details: TradeDetails,
-#         date: date,
-#         snapshot: "MarketModel",
-#         account: Any,
-#         live_trades_set: dict[str, set["Trades"]],
-#     ):
-#         """Calculate notional of trade."""
+            if np.abs(mid_cost_diff) < tolerance:
+                return mid_strike
 
-#         total_opt_mtm = 0
-#         total_open_notional = 0
+            if mid_cost_diff > 0:
+                low_strike = mid_strike
+            else:
+                high_strike = mid_strike
 
-#         for _, set_trades in live_trades_set.items():
-#             total_set_opt_mtm = sum(
-#                 trade.mtm(data=snapshot, dates=date) for trade in set_trades
-#             )
-#             total_set_open_notional = sum(
-#                 trade.legs[0].strike * trade.legs[0].notional_amounts
-#                 for trade in set_trades
-#                 if "Option" in trade.style
-#             )
-#             total_opt_mtm += total_set_opt_mtm
-#             total_open_notional += total_set_open_notional
-#         balance_account = account.balance
-#         if not isinstance(self.leverage_ratio, (int, float)):
-#             assert self.leverage_ratio == "dynamic"
-#             self.leverage_ratio = snapshot.get("VIX GVZ 22D Ratio SIGNAL", dates=date)[
-#                 0
-#             ][0]
-#             self.leverage_ratio = max(1, self.leverage_ratio)
-#         max_spend = self.leverage_ratio * balance_account
-#         first_term = self.percent_allocation * (max_spend + total_opt_mtm)
-#         second_term = max_spend - total_open_notional
-#         allocation = max(0, min(first_term, second_term))
-
-#         match trade_details.style:
-#             case "ExchangeSpot":
-#                 return allocation * self.is_over_min_iv(snapshot=snapshot, date=date)
-#             case "ExchangePutOption":
-#                 return allocation * (
-#                     1 - self.is_over_min_iv(snapshot=snapshot, date=date)
-#                 )
-
-#     def is_over_min_iv(
-#         self,
-#         snapshot: "MarketModel",
-#         date: date,
-#         linear_range: tuple[int, int] = (10, 10),
-#     ):
-#         iv = snapshot.get("GLD Call Imp Vol SIGNAL", dates=date)[0][0]
-#         if iv <= linear_range[0]:
-#             return 0.0
-#         elif iv > linear_range[1]:
-#             return 1.0
-#         else:
-#             dy, dx = 1, linear_range[1] - linear_range[0]
-#             return (dy / dx) * (iv - linear_range[0])
-
-#     def calculate_moneyness(self, snapshot: "MarketModel", date: date):
-#         """Calculate moneyness of trade."""
-#         implied_volatility = snapshot.get("GLD Call Imp Vol SIGNAL", dates=date)[0][0]
-#         if implied_volatility < 30:
-#             return 1.015
-#         elif implied_volatility > 50:
-#             return 1.2
-#         else:
-#             return 1.015 + (0.185 / 20) * (implied_volatility - 30)  # Linear
+        return (low_strike + high_strike) / 2

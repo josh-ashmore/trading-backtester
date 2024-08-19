@@ -1,8 +1,10 @@
 """Optimisation Config."""
 
 from enum import Enum
-from typing import Dict, List, Literal
+from typing import List, Literal
 from pydantic import BaseModel, Field
+
+from modules.optimiser.param_grids.param_grids import ParamGrids
 
 
 class OptimisationMethod(str, Enum):
@@ -18,7 +20,7 @@ class Objective(str, Enum):
 
     MAXIMISE_RETURN = "maximise_return"
     MINIMISE_RISK = "minimise_risk"
-    SHARPE_RATIO = "sharpe_ratio"
+    MAXIMISE_SHARPE_RATIO = "maximise_sharpe_ratio"
 
 
 class OptimisationConfig(BaseModel):
@@ -35,9 +37,8 @@ class OptimisationConfig(BaseModel):
     optimisation_method: OptimisationMethod = Field(
         description="Method used for optimisation."
     )
-    parameter_grid: Dict[str, List[float]] = Field(
-        description="Parameters to optimise with their respective ranges or values."
-    )
+    param_grids: List[ParamGrids]  # should this be a list so we can do multiple passes
+    # or just focus on one optimisation at a time?
     objective: Objective = Field(description="Goal of the optimisation process.")
     max_iterations: int = Field(default=100, description="Limit for iterations.")
     early_stopping: bool = Field(default=True, description="Stop if no improvement.")

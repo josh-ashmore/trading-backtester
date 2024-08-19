@@ -1,7 +1,6 @@
 """Test example strategy."""
 
 from datetime import date
-from logic.new_backtester import Backtester
 from models.account.account import Account
 from models.input.input import (
     BaseStrategyInput,
@@ -11,12 +10,14 @@ from models.input.input import (
 )
 from models.rules.comparison import DateField, PortfolioField, ValueField
 from models.rules.rules import TradeRule, TradeCondition, ComparisonField
-from models.rules.temp_execution import (
+from models.rules.execution import (
     CallTrade,
     ExecutionRule,
+    NotionalRule,
     PutTrade,
     TreasuryBillTrade,
 )
+from modules.orchestrator import BacktesterOrchestrator
 
 
 def test_example_strategy(market_data):
@@ -40,6 +41,9 @@ def test_example_strategy(market_data):
                     direction="Buy",
                     strike=5,
                     strike_calculation="percent_otm",
+                    notional_rule=NotionalRule(
+                        rule_type="percentage_of_account", value=50
+                    ),
                 ),
                 CallTrade(
                     underlying="GOLD",
@@ -47,6 +51,9 @@ def test_example_strategy(market_data):
                     direction="Sell",
                     strike=None,
                     strike_calculation="abs",
+                    notional_rule=NotionalRule(
+                        rule_type="percentage_of_account", value=50
+                    ),
                 ),
             ],
         )
@@ -122,7 +129,15 @@ def test_example_strategy(market_data):
         execution_rules=[
             ExecutionRule(
                 rule_type="Buy",
-                trades=[TreasuryBillTrade(underlying="US10Y", direction="Buy")],
+                trades=[
+                    TreasuryBillTrade(
+                        underlying="US10Y",
+                        direction="Buy",
+                        notional_rule=NotionalRule(
+                            rule_type="percentage_of_account", value=100
+                        ),
+                    )
+                ],
             )
         ],
     )
@@ -132,10 +147,10 @@ def test_example_strategy(market_data):
         market_data_settings=market_data_settings,
         trade_data_settings=trade_data_settings,
         trade_rule_settings=[put_call_trade_rules, treasury_trade_settings],
-        account=Account(currency="USD", initial_balance=500),
+        account=Account(currency="USD", initial_balance=5_000),
     )
 
-    backtester = Backtester(strategy_input=strategy_input)
+    backtester = BacktesterOrchestrator(strategy_input=strategy_input)
     backtester.run()
 
     assert True

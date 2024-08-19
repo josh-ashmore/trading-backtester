@@ -2,8 +2,11 @@
 
 from datetime import date
 from enum import Enum
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from modules.stream_manager import Stream
 
 
 class RollInterval(str, Enum):
@@ -25,11 +28,11 @@ class StreamConfig(BaseModel):
     roll_interval: RollInterval = Field(
         default="monthly", description="Interval at which streams roll."
     )
-    expiration_interval: int = Field(
+    expiration_interval_months: int = Field(
         default=12, description="Expiration interval in months for each stream."
     )
 
-    def is_roll_due(self, stream, current_date: date):
+    def is_roll_due(self, stream: "Stream", current_date: date):
         """Determine if the stream should be rolled.
 
         Logic is based on roll_interval and expiration_interval.

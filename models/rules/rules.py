@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, List, Optional
 from models.rules.comparison import ComparisonField
 from models.rules.enums import ValueConditionType, ActionType, LogicType
 from models.trades.schedule import TradeSchedule
-from models.trades.spot_trade import Trades
+from models.trades.trades import Trades
+
 
 if TYPE_CHECKING:
     from models.market_data.market_model import MarketModel
