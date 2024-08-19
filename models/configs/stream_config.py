@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from modules.stream_manager import Stream
+    from modules.managers.stream_manager import Stream
 
 
 class RollInterval(str, Enum):
@@ -19,7 +19,11 @@ class RollInterval(str, Enum):
 
 
 class StreamConfig(BaseModel):
-    """Stream Config Model."""
+    """Stream Config Model.
+
+    This config controls how streams of trades can be placed and rolled automatically
+    without the requirement for duplicating trade and execution rules.
+    """
 
     config_name: Literal["stream"] = Field(
         default="stream", description="Name of the stream configuration."

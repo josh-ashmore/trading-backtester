@@ -13,7 +13,7 @@ class TradeRuleSettings(BaseModel):
     Need to define this better.
     """
 
-    trade_rules: list["TradeRule"]
+    trade_rules: List["TradeRule"]
     execution_rules: List["ExecutionRule"]
 
     open_rules: list["TradeRule"] | None = None

@@ -16,7 +16,7 @@ from models.rules.execution import (
     Trades,
 )
 from models.trades.schedule import TradeSchedule
-from modules.stream_manager import Stream
+from modules.managers.stream_manager import Stream
 
 
 class Backtester(BaseModel):

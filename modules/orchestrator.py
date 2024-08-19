@@ -6,9 +6,9 @@ from pydantic import BaseModel, model_validator
 from models.input.input import BaseStrategyInput
 from models.output.output import BacktesterOutput
 from modules.optimiser.optimiser_manager import OptimiserManager
-from modules.risk_management_manager import RiskManager
-from modules.stream_manager import StreamManager
-from modules.trade_manager import TradeManager
+from modules.managers.risk_management_manager import RiskManager
+from modules.managers.stream_manager import StreamManager
+from modules.managers.trade_manager import TradeManager
 
 
 class OrchestratorManagers(BaseModel):
