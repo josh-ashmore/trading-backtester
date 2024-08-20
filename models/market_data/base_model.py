@@ -1,15 +1,20 @@
 """Market Data Base Model."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import date
 from typing import Dict, List, Tuple, Optional
 
 
 class MarketDataBase(BaseModel):
-    """Market Data Base Model."""
+    """Market Data Base Model.
+
+    As we are applying values directly to the market
+    data base model, should"""
 
     symbol: str = Field(..., description="Instrument symbol or ticker")
     spot_date: date = Field(..., description="Timestamp of the market data")
+
+    model_config = ConfigDict(extra="allow")
 
 
 class MarketDataSpot(MarketDataBase):

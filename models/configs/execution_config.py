@@ -18,6 +18,8 @@ class ExecutionConfig(BaseModel):
 
     This config specifies execution strategies such
     as limit orders, market orders, or algorithms like VWAP.
+
+    Should be able to define artificial slippage parameters etc.
     """
 
     config_name: Literal["execution"] = Field(
