@@ -1,0 +1,5 @@
+[flake8]
+max-line-length=88
+max-cognitive-complexity=15
+docstring-convention=google
+pytest-parametrize-names-type=csv
