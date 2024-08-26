@@ -15,7 +15,11 @@
       "name": "Pytest Current",
       "type": "debugpy",
       "request": "launch",
-      "program": "${file}",
+      "args": ["${file}"],
+      "env": { "PYTHONPATH": "${PYTHONPATH}:${workspaceFolder}" },
+      "python": "/Users/joshashmore/Library/Caches/pypoetry/virtualenvs/trading-backtester-qXpROkCl-py3.12/bin/python",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
       "module": "pytest",
       "justMyCode": false
     },
