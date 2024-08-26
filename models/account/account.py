@@ -6,7 +6,7 @@ from pydantic import BaseModel, model_validator
 from static_data.underlying_data import Currencies
 
 if TYPE_CHECKING:
-    from models.rules.execution import Trades
+    from models.trades.trades import Trades
 
 
 class Account(BaseModel):

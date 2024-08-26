@@ -42,7 +42,7 @@ def test_example_strategy(market_data):
                     strike=5,
                     strike_calculation="percent_otm",
                     notional_rule=NotionalRule(
-                        rule_type="percentage_of_account", value=50
+                        rule_type="percentage_of_account", value=0.5
                     ),
                 ),
                 CallTrade(
@@ -52,7 +52,7 @@ def test_example_strategy(market_data):
                     strike=None,
                     strike_calculation="abs",
                     notional_rule=NotionalRule(
-                        rule_type="percentage_of_account", value=50
+                        rule_type="percentage_of_account", value=0.5
                     ),
                 ),
             ],
@@ -134,7 +134,7 @@ def test_example_strategy(market_data):
                         underlying="US10Y",
                         direction="Buy",
                         notional_rule=NotionalRule(
-                            rule_type="percentage_of_account", value=100
+                            rule_type="percentage_of_account", value=1
                         ),
                     )
                 ],

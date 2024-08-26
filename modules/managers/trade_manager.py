@@ -6,9 +6,9 @@ from pydantic import BaseModel, model_validator
 
 from models.account.account import Account
 from models.input.input import TradeRuleSettings
-from models.rules.rules import TradeRule
 from models.rules.execution import ExecutionRule, TradeMessageModel, Trades
 from models.trades.schedule import TradeSchedule
+from models.rules.rules import TradeRule
 
 if TYPE_CHECKING:
     from models.market_data.market_model import MarketModel
@@ -88,7 +88,7 @@ class TradeManager(BaseModel):
         self,
         data: "MarketModel",
         date: date,
-        trade_rule: TradeRule,
+        trade_rule: "TradeRule",
         trade_execution_rule: ExecutionRule,
         account: Account,
     ):
@@ -104,7 +104,7 @@ class TradeManager(BaseModel):
         date: date,
         data: "MarketModel",
         trade: Trades,
-        signal: TradeRule,
+        signal: "TradeRule",
         account: Account,
     ):
         """Close trade."""

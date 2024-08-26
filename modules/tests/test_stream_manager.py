@@ -4,7 +4,7 @@ from datetime import date
 
 from models.configs.stream_config import StreamConfig
 from models.rules.execution import CallTrade, PutTrade
-from models.trades.trades import NotionalRule
+from models.trades.trade_models import NotionalRule
 from modules.managers.stream_manager import StreamManager
 
 # from modules.tests.stream_expected_outputs import EXPECTED_OUTPUT

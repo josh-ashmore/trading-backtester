@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 import numpy as np
 
 from models.account.account import Account
-from models.rules.execution import Trades
+from models.trades.trades import Trades
 
 
 class BacktesterOutput(BaseModel):

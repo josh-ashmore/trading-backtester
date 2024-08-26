@@ -7,7 +7,7 @@ from typing import List, Optional
 from dateutil.relativedelta import relativedelta
 
 from models.configs.stream_config import RollInterval, StreamConfig
-from models.rules.execution import Trades
+from models.trades.trades import Trades
 
 
 class Stream(BaseModel):

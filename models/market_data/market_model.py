@@ -119,25 +119,28 @@ class MarketModel(BaseModel):
         date: date,
         asset_class: AssetClass,
         instrument_type: InstrumentTypes,
-    ):
-        """Get next expiry date."""
+        offset: int = 0,
+    ) -> Optional[date]:
+        """Get next (or offset) expiry date."""
+
         data: Dict[
             str,
             Union[
                 FXMarketData | FIMarketData | EQMarketData | CMMarketData | CCMarketData
             ],
         ] = getattr(self, asset_class)
+
         surface = next(
             surface.surface
             for surface in data[underlying].volatility
             if surface.spot_date == date
         )
-        match instrument_type:
-            case "Call":
-                return next(
-                    datum.maturity for datum in surface if datum.maturity >= date
-                )
-            case "Put":
-                return next(
-                    datum.maturity for datum in surface if datum.maturity >= date
-                )
+
+        expiries = sorted(
+            {datum.maturity for datum in surface if datum.maturity >= date}
+        )
+
+        if offset < len(expiries):
+            return expiries[offset]
+        else:
+            return None

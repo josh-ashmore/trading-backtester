@@ -14,20 +14,21 @@ from models.market_data.cm_models import CMVolatilitySurfaceData
 from models.market_data.eq_models import EQVolatilitySurfaceData
 from models.market_data.fx_models import FXVolatilitySurfaceData
 from models.rules.enums import ActionType
-from models.rules.rules import TradeRule
+
 from models.trades.enums import CalcualtionType, DirectionType, NotionalRuleType
-from models.trades.trades import (
+from models.trades.trade_models import (
     CallTrade,
     NotionalRule,
     PutTrade,
     TradeMessageModel,
-    Trades,
     TreasuryBillTrade,
 )
+from models.trades.trades import Trades
 
 
 if TYPE_CHECKING:
     from models.market_data.market_model import MarketModel
+    from models.rules.rules import TradeRule
 
 
 class ExecutionRuleType(str, Enum):
@@ -57,7 +58,7 @@ class ExecutionRule(BaseModel):
     target_cost: Optional[float | None] = None
 
     def execute(
-        self, trade_rule: TradeRule, data: "MarketModel", date: date, account: Account
+        self, trade_rule: "TradeRule", data: "MarketModel", date: date, account: Account
     ):
         """Execute all trades logic."""
         new_trades = []
@@ -102,7 +103,7 @@ class ExecutionRule(BaseModel):
         trade: Trades,
         data: "MarketModel",
         date: date,
-        trade_rule: TradeRule,
+        trade_rule: "TradeRule",
         account: Account,
     ):
         """Execute each trade logic."""
@@ -136,7 +137,7 @@ class ExecutionRule(BaseModel):
         trade: PutTrade | CallTrade,
         data: "MarketModel",
         date: date,
-        trade_rule: TradeRule,
+        trade_rule: "TradeRule",
         account: Account,
     ):
         """Execute option trade logic."""
@@ -196,7 +197,7 @@ class ExecutionRule(BaseModel):
         trade: TreasuryBillTrade,
         data: "MarketModel",
         date: date,
-        trade_rule: TradeRule,
+        trade_rule: "TradeRule",
         account: Account,
     ):
         """Execute Treasury Bill Trade."""
@@ -230,9 +231,7 @@ class ExecutionRule(BaseModel):
             case NotionalRuleType.FIXED:
                 notional_amount = float(notional_rule.value)
             case NotionalRuleType.PERCENTAGE_OF_ACCOUNT:
-                notional_amount = account.cash_balance * (
-                    float(notional_rule.value) / 100.0
-                )
+                notional_amount = account.cash_balance * float(notional_rule.value)
             case NotionalRuleType.DYNAMIC_FORMULA | _:
                 # return self.evaluate_formula(notional_rule.value, trade, account)
                 raise NotImplementedError(

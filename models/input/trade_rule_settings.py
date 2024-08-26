@@ -1,10 +1,12 @@
 """Trade Rule Settings Model."""
 
-from typing import List
+from typing import TYPE_CHECKING, List
 from pydantic import BaseModel, model_validator
 from models.rules.enums import ActionType
-from models.rules.execution import ExecutionRule
-from models.rules.rules import TradeRule
+
+if TYPE_CHECKING:
+    from models.rules.rules import TradeRule
+    from models.rules.execution import ExecutionRule
 
 
 class TradeRuleSettings(BaseModel):

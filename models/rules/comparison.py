@@ -39,7 +39,7 @@ from static_data.underlying_data import AssetClass
 
 if TYPE_CHECKING:
     from models.market_data.market_model import MarketModel
-    from models.rules.execution import Trades
+    from models.trades.trades import Trades
 
 
 class DateOffsetType(str, Enum):
@@ -49,6 +49,7 @@ class DateOffsetType(str, Enum):
     WEEK = "week"
     MONTH = "month"
     YEAR = "year"
+    EXPIRY = "expiry"
 
 
 class DateSettings(BaseModel):
@@ -246,24 +247,33 @@ class ComparisonField(BaseModel):
         value = self.field_settings.return_value(
             date=date, data=data, trade=trade, trade_schedule=trade_schedule
         )
-        return self.apply_settings(value=value)
+        return self.apply_settings(data=data, trade=trade, value=value)
 
-    def apply_settings(self, value: Any):
+    def apply_settings(self, data: "MarketModel", trade: "Trades", value: Any):
         """Apply settings to value."""
         match self.field_settings.field_type:
             case FieldType.DATE:
-                offset_type = {
-                    DateOffsetType.DAY: timedelta(days=self.additional_settings.offset),
-                    DateOffsetType.WEEK: relativedelta(
-                        weeks=self.additional_settings.offset
-                    ),
-                    DateOffsetType.MONTH: relativedelta(
-                        months=self.additional_settings.offset
-                    ),
-                    DateOffsetType.YEAR: relativedelta(
-                        years=self.additional_settings.offset
-                    ),
-                }
-                return value + offset_type[self.additional_settings.offset_type]
+                match self.additional_settings.offset_type:
+                    case DateOffsetType.DAY:
+                        offset = timedelta(days=self.additional_settings.offset)
+                    case DateOffsetType.WEEK:
+                        offset = relativedelta(weeks=self.additional_settings.offset)
+                    case DateOffsetType.MONTH:
+                        offset = relativedelta(months=self.additional_settings.offset)
+                    case DateOffsetType.YEAR:
+                        offset = relativedelta(years=self.additional_settings.offset)
+                    case DateOffsetType.EXPIRY:
+                        offset_next_expiry = data.get_next_expiry(
+                            underlying=trade.underlying,
+                            date=value,
+                            asset_class=trade.asset_class,
+                            instrument_type=trade.instrument_type,
+                            offset=self.additional_settings.offset,
+                        )
+                        if offset_next_expiry:
+                            return offset_next_expiry
+                        else:
+                            raise ValueError("Offset exceeds available expiry dates")
+                return value + offset
             case FieldType.VALUE:
                 return value
